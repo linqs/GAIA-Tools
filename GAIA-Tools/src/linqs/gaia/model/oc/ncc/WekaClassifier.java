@@ -448,14 +448,14 @@ public class WekaClassifier extends BaseVBClassifier implements VBClassifier {
 	 */
 	private void createInstance(Instances instances, Decorable di, boolean ispredict) {
 		double[] instvalues = new double[attinfosize];
-		
 		int attindex = 0;
+		
 		Schema schema = di.getSchema();
 		for(String fid:featureids) {
-			Feature f = schema.getFeature(fid);
-			Attribute a = instances.attribute(attindex);
 			FeatureValue fvalue = di.getFeatureValue(fid);
+			Attribute a = instances.attribute(attindex);
 			
+			Feature f = schema.getFeature(fid);		
 			if(!(f instanceof CompositeFeature)) {
 				// Handle non multi-valued feature
 				instvalues[attindex] = this.gaiavalues2weka(f, fid, fvalue, a, ispredict);
@@ -518,10 +518,15 @@ public class WekaClassifier extends BaseVBClassifier implements VBClassifier {
 				// This is fine since we're not using Weka's evaluation system
 				// where this value is needed.
 				category = cf.getAllCategories().get(0);
-			} else {
+			} else if(!(fvalue instanceof CategValue) && !ispredict && this.targetfeatureid.equals(fid)) {
+				throw new InvalidStateException("All training instances must be labeled");
+			} else if(fvalue.equals(FeatureValue.UNKNOWN_VALUE)) {
+				value = Instance.missingValue();
+				return value;
+			} else {				
 				category = ((CategValue) fvalue).getCategory();
 			}
-
+			
 			// Increment training count
 			if(this.fclasscount!= null && !ispredict) {
 				this.fclasscount.increment(category);
@@ -529,7 +534,7 @@ public class WekaClassifier extends BaseVBClassifier implements VBClassifier {
 			
 			// Handle weka instances
 			value = a.indexOfValue(category);
-		} else if(f.equals(FeatureValue.UNKNOWN_VALUE)) {
+		} else if(fvalue.equals(FeatureValue.UNKNOWN_VALUE)) {
 			value = Instance.missingValue();
 		} else {
 			throw new UnsupportedTypeException("Unsupported feature type: "
@@ -607,7 +612,6 @@ public class WekaClassifier extends BaseVBClassifier implements VBClassifier {
 	private CategValue predictSingleItem(Decorable testitem, boolean savewekatestfile) {
 		CategValue cvalue = null;
 		Instances testinstances = gaia2weka(testitem, true);
-		
 		try {
 			if(savewekatestfile){
 				String savefile = this.getStringParameter("wekatestfile");
@@ -621,6 +625,7 @@ public class WekaClassifier extends BaseVBClassifier implements VBClassifier {
 			
 			Instance inst = testinstances.instance(0);
 			double prob[] = this.wekaclassifier.distributionForInstance(inst);
+
 			// Can just take maximum.  This is equivalent to what Weka does
 			// to classify the instance.  This saves the cost of recomputing.
 			int pred = ArrayUtils.maxValueIndex(prob);
@@ -674,5 +679,26 @@ public class WekaClassifier extends BaseVBClassifier implements VBClassifier {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+	}
+	
+	@Override
+	public VBClassifier copyModel() {
+		WekaClassifier vbc = new WekaClassifier();
+		vbc.copyParameters(this);
+		vbc.setCID(this.getCID());
+		
+		vbc.targetschemaid = this.targetschemaid;
+		vbc.targetfeatureid = this.targetfeatureid;
+		
+		// Load features to use
+		vbc.featureids = new ArrayList<String>(this.featureids);
+		vbc.targetcategories = new UnmodifiableList<String>(this.targetcategories);
+		try {
+			vbc.wekaclassifier = Classifier.makeCopy(this.wekaclassifier);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+		
+		return vbc;
 	}
 }
