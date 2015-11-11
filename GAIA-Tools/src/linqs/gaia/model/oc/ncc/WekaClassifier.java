@@ -354,9 +354,7 @@ public class WekaClassifier extends BaseVBClassifier implements VBClassifier {
 		// Add features
 		FastVector attInfo = new FastVector();
 		Attribute targetattr = null;
-		int counter = -1;
 		for(String fid:featureids) {
-			counter++;
 			String fname = fid;
 			Feature f = schema.getFeature(fid);
 			
@@ -701,4 +699,5 @@ public class WekaClassifier extends BaseVBClassifier implements VBClassifier {
 		
 		return vbc;
 	}
+	
 }
